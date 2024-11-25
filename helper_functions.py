@@ -272,5 +272,78 @@ def my_warp_affine(input_image, M, dsize):
             n_image[o_y, o_x] = input_image[i_y, i_x]
     return n_image
 
-def my_bilateral_filter():
-    pass
+def my_guided_filter(src, guide, r, eps): # 只输入一张图像
+    h, w = src.shape[:2]
+    q = np.zeros_like(src, dtype=np.uint8)
+
+    for i in range(h):
+        for j in range(w):
+            # 定义窗口范围
+            i_min, i_max = max(i-r, 0), min(h, i+r+1)
+            j_min, j_max = max(j-r, 0), min(w, j+r+1)
+
+            # 提取局部窗口
+            I_win = src[i_min:i_max, j_min:j_max]
+            p_win = guide[i_min:i_max, j_min:j_max]
+
+            # 计算局部统计量
+            mean_I = np.mean(I_win)
+            mean_p = np.mean(p_win)
+            mean_Ip = np.mean(I_win * p_win)
+            cov_Ip = mean_Ip - mean_I * mean_p
+            var_I = np.mean(I_win * I_win) - mean_I * mean_I
+
+            # 计算线性系数 a 和 b
+            a = cov_Ip / (var_I + eps)
+            b = mean_p - a * mean_I
+
+            # 输出q
+            q[i, j] = a * src[i, j] + b
+    
+    return q
+
+def my_fast_guided_filter(I, p, r, eps):
+    # 盒式滤波
+    mean_I = cv.boxFilter(I, -1, (r, r))
+    mean_p = cv.boxFilter(p, -1, (r, r))
+
+    corr_I = cv.boxFilter(I*I, -1, (r, r))
+    corr_Ip = cv.boxFilter(I*p, -1, (r, r))
+
+    # 计算协方差
+    var_I = corr_I - mean_I * mean_I
+    cov_Ip = corr_Ip - mean_I * mean_p
+
+    # 计算a, b
+    a = cov_Ip / (var_I + eps)
+    b = mean_p - a * mean_I
+
+    # 对a, b盒式滤波，并输出q
+    mean_a = cv.boxFilter(a, -1, (r, r))
+    mean_b = cv.boxFilter(b, -1, (r, r))
+    q = mean_a * I + mean_b
+    output_image = np.clip(q, 0, 255).astype(np.uint8)
+    return output_image
+
+def my_bilateral_filter(input_image, d, sigma_color, sigma_space):
+    def G(x, sigma):
+        return np.exp(-x**2 / (2 * sigma**2))
+
+    height, width = input_image.shape[:2]
+    n_image = np.zeros_like(input_image, dtype=np.uint8)
+    r = d // 2
+    for i in range(height):
+        for j in range(width):
+            W_p = 0
+            I_p = 0
+            for m in range(-r, d-r):
+                for n in range(-r, d-r):
+                    n_i, n_j = i + m, j + n
+                    if n_i < 0 or n_i >= height or n_j < 0 or n_j >= width:
+                        continue
+                    range_weight = G(np.mean(input_image[i, j]) - np.mean(input_image[n_i, n_j]), sigma_color)
+                    spatial_weight = G(math.sqrt(m**2 + n**2), sigma_space)
+                    W_p += range_weight * spatial_weight
+                    I_p += range_weight * spatial_weight * input_image[n_i, n_j]
+            n_image[i, j] = np.clip(I_p / W_p, 0, 255)
+    return n_image

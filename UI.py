@@ -74,14 +74,15 @@ def create_demo_hw4(process):
         with gr.Row():
             with gr.Column():
                 input_image = gr.Image(sources=['upload', 'webcam', 'clipboard'], type='numpy', label='输入图像')
-                mode = gr.Radio(['双边滤波', 'NLM滤波', '导向滤波', '基于盒式滤波优化的快速导向滤波', '手动双边滤波'], label='滤波方式', value='双边滤波')
+                mode = gr.Radio(['双边滤波', 'NLM滤波', '导向滤波', '手动导向滤波', '基于盒式滤波优化的快速导向滤波', '手动双边滤波'], label='滤波方式', value='双边滤波')
             with gr.Column():
                 output_image = gr.Image(type='numpy', label='输出图像', interactive=False)
                 run_button = gr.Button(value='运行')
+                output_image2 = gr.Image(type='numpy', label='与原图之差（灰度图）', interactive=False)
 
         run_button.click(fn=process,
                         inputs=[input_image, mode],
-                        outputs=[output_image])
+                        outputs=[output_image, output_image2])
     return demo
 
 def create_demo_hw5(process):

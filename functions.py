@@ -74,18 +74,22 @@ def function_hw4(input_image, mode):
         raise gr.Error('输入错误：在处理之前请先输入一张图像', duration=5)
     match mode:
         case '双边滤波':
-            output_image = cv.bilateralFilter(input_image, 9, 75, 75)
+            output_image = cv.bilateralFilter(input_image, 5, 75, 75)
         case 'NLM滤波':
-            output_image = cv.fastNlMeansDenoisingColored(input_image, None, 10, 10, 7, 21)
+            output_image = cv.fastNlMeansDenoisingColored(input_image)
         case '导向滤波':
-            output_image = my_guided_filter(input_image, input_image, 9, 0.1)
+            output_image = cv.ximgproc.guidedFilter(input_image, input_image, 5, 0.1)
+        case '手动导向滤波':
+            output_image = my_guided_filter(input_image, input_image, 5, 0.1)
         case '基于盒式滤波优化的快速导向滤波':
-            output_image = my_fast_guided_filter(input_image, input_image, 9, 0.1)
+            output_image = my_fast_guided_filter(input_image, input_image, 5, 0.1)
         case '手动双边滤波':
-            output_image = my_bilateral_filter(input_image, 9, 75, 75)
+            output_image = my_bilateral_filter(input_image, 5, 75, 75)
         case _:
             output_image = input_image
-    return output_image
+    output_image2 = my_diff_image(input_image, output_image)
+    output_image2 = cv.cvtColor(output_image2, cv.COLOR_RGB2GRAY)
+    return output_image, output_image2
 
 def function_hw5(input_image):
     if input_image is None:
