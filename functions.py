@@ -91,9 +91,30 @@ def function_hw4(input_image, mode):
     output_image2 = cv.cvtColor(output_image2, cv.COLOR_RGB2GRAY)
     return output_image, output_image2
 
-def function_hw5(input_image):
+def function_hw5(input_image, input_image2, mode):
     if input_image is None:
         raise gr.Error('输入错误：在处理之前请先输入一张图像', duration=5)
-    output_image = input_image
-    # 请补充作业5的图像处理代码
-    return output_image
+    
+    match mode:
+        case '直方图均衡化':
+            output_image = cv.cvtColor(input_image, cv.COLOR_RGB2HLS)
+            output_image[:, :, 1] = cv.equalizeHist(output_image[:, :, 1])
+        case 'CLAHE':
+            clahe = cv.createCLAHE()
+            output_image = cv.cvtColor(input_image, cv.COLOR_RGB2HLS)
+            output_image[:, :, 1] = clahe.apply(output_image[:, :, 1])
+        case '手动直方图均衡化':
+            output_image = cv.cvtColor(input_image, cv.COLOR_RGB2HLS)
+            output_image[:, :, 1] = my_equalizeHist(output_image[:, :, 1])
+        case '手动CLAHE':
+            clahe = my_createCLAHE()
+            output_image = cv.cvtColor(input_image, cv.COLOR_RGB2HLS)
+            output_image[:, :, 1] = clahe.apply(output_image[:, :, 1])
+        case '直方图匹配':
+            if input_image2 is None:
+                raise gr.Error('输入错误：在处理之前请先输入一张匹配图像', duration=5)
+            output_image = cv.cvtColor(input_image, cv.COLOR_RGB2HLS)
+            input_image2 = cv.cvtColor(input_image2, cv.COLOR_RGB2HLS)
+            output_image[:, :, 1] = my_hist_match(output_image[:, :, 1], input_image2[:, :, 1])
+            
+    return cv.cvtColor(output_image, cv.COLOR_HLS2RGB)

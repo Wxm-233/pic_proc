@@ -87,15 +87,17 @@ def create_demo_hw4(process):
 
 def create_demo_hw5(process):
     with gr.Blocks() as demo:
-        gr.Markdown('## 作业五: XXX工具') 
+        gr.Markdown('## 作业五: 图像提亮工具') 
         with gr.Row():
             with gr.Column():
-                input_image = gr.Image(sources=['upload', 'webcam', 'clipboard'], type='numpy', label='输入图像')  
+                input_image = gr.Image(sources=['upload', 'webcam', 'clipboard'], type='numpy', label='输入图像')
+                input_image2 = gr.Image(sources=['upload', 'webcam', 'clipboard'], type='numpy', label='匹配图像')
+                mode = gr.Radio(['直方图均衡化', 'CLAHE', '手动直方图均衡化', '手动CLAHE', '直方图匹配'], label='提亮方式', value='直方图均衡化')
             with gr.Column():
                 output_image = gr.Image(type='numpy', label='输出图像', interactive=False)
                 run_button = gr.Button(value='运行')
 
         run_button.click(fn=process,
-                        inputs=[input_image],
+                        inputs=[input_image, input_image2, mode],
                         outputs=[output_image])
     return demo

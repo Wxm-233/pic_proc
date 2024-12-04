@@ -347,3 +347,160 @@ def my_bilateral_filter(input_image, d, sigma_color, sigma_space):
                     I_p += range_weight * spatial_weight * input_image[n_i, n_j]
             n_image[i, j] = np.clip(I_p / W_p, 0, 255)
     return n_image
+
+def calculate_cdf(image):
+    hist = np.zeros(256)
+    for i in range(256):
+        hist[i] = np.sum(image == i)
+    hist = hist / np.sum(hist)
+    cdf = np.cumsum(hist)
+    return cdf
+
+def calculate_cdf_with_clipLimit(image, clipLimit):
+    hist = np.zeros(256).astype(float)
+    for i in range(256):
+        hist[i] = np.sum(image == i)
+    hist = hist / np.sum(hist)
+    hist_clip = np.clip(hist, 0, clipLimit/256)
+    excess = np.sum(hist) - np.sum(hist_clip)
+    hist_clip += excess / 256 # 重新分配多余像素
+    cdf = np.cumsum(hist_clip)
+    return cdf
+
+def my_equalizeHist(input_image):
+    height, width = input_image.shape
+    cdf = calculate_cdf(input_image)
+    output_image = np.zeros_like(input_image)
+    output_image = np.round(cdf[input_image] * 255)
+    return output_image
+
+def my_createCLAHE(clipLimit=40.0, tileGridSize=(8, 8)):
+    class CLAHE:
+        def __init__(self, clipLimit, tileGridSize):
+            self.clipLimit = clipLimit
+            self.tileGridSize = tileGridSize
+        def apply(self, input_image):
+            height, width = input_image.shape
+            output_image = np.zeros_like(input_image)
+            tile_height = height // self.tileGridSize[0]
+            tile_width = width // self.tileGridSize[1]
+            class Tile:
+                def __init__(self, x, y, cdf):
+                    self.x = x
+                    self.y = y
+                    self.cdf = cdf
+            tiles = []
+            # 计算每个tile的cdf
+            for i in range(0, height, tile_height):
+                for j in range(0, width, tile_width):
+                    tile = input_image[i:i+tile_height, j:j+tile_width]
+                    cdf = calculate_cdf_with_clipLimit(tile, self.clipLimit)
+                    t = Tile(i, j, cdf)
+                    tiles.append(t)
+            # 将图像分为9个区域：左上、上、右上、左、中、右、左下、下、右下
+            # 以下为红色区域，即直接用变换函数
+            tile1 = input_image[0:tile_height//2, 0:tile_width//2] # 左上
+            output_image[0:tile_height//2, 0:tile_width//2] = np.round(tiles[0].cdf[tile1] * 255)
+            tile2 = input_image[0:tile_height//2, width-tile_width//2:width] # 右上
+            output_image[0:tile_height//2, width-tile_width//2:width] = np.round(tiles[tileGridSize[1]-1].cdf[tile2] * 255)
+            tile3 = input_image[height-tile_height//2:height, 0:tile_width//2] # 左下
+            output_image[height-tile_height//2:height, 0:tile_width//2] = np.round(tiles[(tileGridSize[0]-1)*tileGridSize[1]].cdf[tile3] * 255)
+            tile4 = input_image[height-tile_height//2:height, width-tile_width//2:width] # 右下
+            output_image[height-tile_height//2:height, width-tile_width//2:width] = np.round(tiles[tileGridSize[0]*tileGridSize[1]-1].cdf[tile4] * 255)
+            # 以下为绿色区域，用相邻两块的变换函数分别算出值后，根据到块中心点的距离进行线性插值
+            for i in range(tileGridSize[0]-1):
+                x_from = i*tile_height + tile_height//2
+                x_to = (i+1)*tile_height + tile_height//2
+                y_from = 0
+                y_to = tile_width//2
+                tile = input_image[x_from:x_to, y_from:y_to] # 左
+                for m in range(tile_height):
+                    for n in range(tile_width//2):
+                        x = x_from + m
+                        y = y_from + n
+                        x1 = x_from
+                        y1 = y_to
+                        x2 = x_to
+                        y2 = y_to
+                        output_image[x, y] = np.round(((x2-x)/(x2-x1) * tiles[i*tileGridSize[1]].cdf[input_image[x, y]] \
+                                           + (x-x1)/(x2-x1) * tiles[(i+1)*tileGridSize[1]].cdf[input_image[x, y]]) * 255)
+            for i in range(tileGridSize[1]-1):
+                x_from = 0
+                x_to = tile_height//2
+                y_from = i*tile_width + tile_width//2
+                y_to = (i+1)*tile_width + tile_width//2
+                tile = input_image[x_from:x_to, y_from:y_to] # 上
+                for m in range(tile_height//2):
+                    for n in range(tile_width):
+                        x = x_from + m
+                        y = y_from + n
+                        x1 = x_to
+                        y1 = y_from
+                        x2 = x_to
+                        y2 = y_to
+                        output_image[x, y] = np.round(((y2-y)/(y2-y1) * tiles[i].cdf[input_image[x, y]] \
+                                           + (y-y1)/(y2-y1) * tiles[i+1].cdf[input_image[x, y]]) * 255)
+            for i in range(tileGridSize[0]-1):
+                x_from = i*tile_height + tile_height//2
+                x_to = (i+1)*tile_height + tile_height//2
+                y_from = width-tile_width//2
+                y_to = width
+                tile = input_image[x_from:x_to, y_from:y_to] # 右
+                for m in range(tile_height):
+                    for n in range(tile_width//2):
+                        x = x_from + m
+                        y = y_from + n
+                        x1 = x_from
+                        y1 = y_from
+                        x2 = x_to
+                        y2 = y_from
+                        output_image[x, y] = np.round(((x2-x)/(x2-x1) * tiles[i*tileGridSize[1]+tileGridSize[1]-1].cdf[input_image[x, y]] \
+                                           + (x-x1)/(x2-x1) * tiles[(i+1)*tileGridSize[1]+tileGridSize[1]-1].cdf[input_image[x, y]]) * 255)
+            for i in range(tileGridSize[1]-1):
+                x_from = height-tile_height//2
+                x_to = height
+                y_from = i*tile_width + tile_width//2
+                y_to = (i+1)*tile_width + tile_width//2
+                tile = input_image[x_from:x_to, y_from:y_to] # 下
+                for m in range(tile_height//2):
+                    for n in range(tile_width):
+                        x = x_from + m
+                        y = y_from + n
+                        x1 = x_from
+                        y1 = y_from
+                        x2 = x_from
+                        y2 = y_to
+                        output_image[x, y] = np.round(((y2-y)/(y2-y1) * tiles[(tileGridSize[0]-1)*tileGridSize[1]+i].cdf[input_image[x, y]] \
+                                           + (y-y1)/(y2-y1) * tiles[(tileGridSize[0]-1)*tileGridSize[1]+i+1].cdf[input_image[x, y]]) * 255)
+            # 以下为紫色区域，用相邻四块的变换函数分别算出值后，根据到块中心点的距离进行双线性插值
+            for i in range(tileGridSize[0]-1):
+                for j in range(tileGridSize[1]-1):
+                    x_from = i*tile_height + tile_height//2
+                    x_to = (i+1)*tile_height + tile_height//2
+                    y_from = j*tile_width + tile_width//2
+                    y_to = (j+1)*tile_width + tile_width//2
+                    tile = input_image[x_from:x_to, y_from:y_to] # 中
+                    for m in range(tile_height):
+                        for n in range(tile_width):
+                            x = x_from + m
+                            y = y_from + n
+                            x1 = x_from
+                            y1 = y_from
+                            x2 = x_to
+                            y2 = y_to
+                            output_image[x, y] = np.round(((x2-x)/(x2-x1) * (y2-y)/(y2-y1) * tiles[i*tileGridSize[1]+j].cdf[input_image[x, y]] \
+                                               + (x-x1)/(x2-x1) * (y2-y)/(y2-y1) * tiles[(i+1)*tileGridSize[1]+j].cdf[input_image[x, y]] \
+                                               + (x2-x)/(x2-x1) * (y-y1)/(y2-y1) * tiles[i*tileGridSize[1]+j+1].cdf[input_image[x, y]] \
+                                               + (x-x1)/(x2-x1) * (y-y1)/(y2-y1) * tiles[(i+1)*tileGridSize[1]+j+1].cdf[input_image[x, y]]) * 255)
+            # print(output_image)
+            return output_image
+    return CLAHE(clipLimit, tileGridSize)
+
+def my_hist_match(src, ref):
+    cdf_src = calculate_cdf(src)
+    cdf_ref = calculate_cdf(ref)
+    lut = np.zeros(256)
+    for i in range(256):
+        lut[i] = np.argmin(np.abs(cdf_src[i] - cdf_ref))
+    output_image = lut[src]
+    return output_image

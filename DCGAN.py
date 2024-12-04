@@ -71,7 +71,7 @@ class Generator(nn.Module):
 device = 'cpu'
 netG = Generator(ngpu).to(device)
 netG.load_state_dict(torch.load('./dcgan_checkpoint.pth', weights_only=True))
-v_a = torch.load('v_a.pt')
+v_a = torch.load('v_a.pt', weights_only=True)
 
 def generate_image(seed, gender):
     random.seed(seed)
